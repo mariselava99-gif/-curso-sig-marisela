@@ -1,14 +1,38 @@
-services:
+﻿services:
   postgis:
     image: postgis/postgis:16-3.4
     container_name: postgis_boyaca
     environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: geodatos
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  geoserver:
+    image: kartoza/geoserver:2.28.3
+    container_name: geoserver_boyaca
+    environment:
+      GEOSERVER_ADMIN_USER: admin
+      GEOSERVER_ADMIN_PASSWORD: geoserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgis
+    restart: unless-stopped
+
+  pg_tileserv:
+    image: pramsey/pg_tileserv:latest
+    container_name: pg_tileserv_boyaca
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgis:5432/geodatos
+    ports:
+      - "7800:7800"
+    depends_on:
+      - postgis
     restart: unless-stopped
 
 volumes:
