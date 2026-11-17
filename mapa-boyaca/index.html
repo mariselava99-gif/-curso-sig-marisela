@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Veredas de Boyacá</title>
+  <title>Mapa interactivo de Boyacá</title>
 
   <link
     rel="stylesheet"
@@ -32,8 +32,9 @@
 </head>
 
 <body>
+
   <div class="titulo">
-    <strong>Veredas de Boyacá</strong>
+    <strong>Mapa interactivo de Boyacá</strong>
   </div>
 
   <div id="mapa"></div>
@@ -41,8 +42,10 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
+    // Crear mapa
     const mapa = L.map("mapa").setView([5.54, -73.36], 8);
 
+    // Mapa base
     L.tileLayer(
       "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
       {
@@ -50,85 +53,148 @@
       }
     ).addTo(mapa);
 
+    // Servicio geográfico de veredas
     const urlBase =
       "https://visualizador.ideam.gov.co/gisserver/rest/services/" +
       "Entidades_Territoriales/FeatureServer/5/query";
 
-    
-async function cargarVeredas() {
-  const todasLasVeredas = [];
-  const tamanoBloque = 200;
-  let desplazamiento = 0;
+    // Cargar veredas de Boyacá
+    async function cargarVeredas() {
+      const todasLasVeredas = [];
+      const tamanoBloque = 200;
+      let desplazamiento = 0;
 
-  while (true) {
-    const parametros = new URLSearchParams({
-      where: "cod_dpto='15'",
-      outFields: "nom_dpto,nom_mpio,nom_ver,cod_ver,area_ha",
-      returnGeometry: "true",
-      outSR: "4326",
-      resultOffset: String(desplazamiento),
-      resultRecordCount: String(tamanoBloque),
-      f: "geojson"
-    });
+      while (true) {
+        const parametros = new URLSearchParams({
+          where: "cod_dpto='15'",
+          outFields: "nom_dpto,nom_mpio,nom_ver,cod_ver,area_ha",
+          returnGeometry: "true",
+          outSR: "4326",
+          resultOffset: String(desplazamiento),
+          resultRecordCount: String(tamanoBloque),
+          f: "geojson"
+        });
 
-    const respuesta = await fetch(urlBase + "?" + parametros);
+        const respuesta = await fetch(urlBase + "?" + parametros);
 
-    if (!respuesta.ok) {
-      throw new Error("Error HTTP: " + respuesta.status);
-    }
+        if (!respuesta.ok) {
+          throw new Error("Error HTTP: " + respuesta.status);
+        }
 
-    const datos = await respuesta.json();
+        const datos = await respuesta.json();
 
-    if (!datos.features || datos.features.length === 0) {
-      break;
-    }
+        if (!datos.features || datos.features.length === 0) {
+          break;
+        }
 
-    todasLasVeredas.push(...datos.features);
-    desplazamiento += datos.features.length;
+        todasLasVeredas.push(...datos.features);
+        desplazamiento += datos.features.length;
 
-    console.log("Veredas cargadas:", todasLasVeredas.length);
+        console.log("Veredas cargadas:", todasLasVeredas.length);
 
-    if (datos.features.length < tamanoBloque) {
-      break;
-    }
-  }
+        if (datos.features.length < tamanoBloque) {
+          break;
+        }
+      }
 
-  if (todasLasVeredas.length === 0) {
-    throw new Error("No se encontraron veredas de Boyacá.");
-  }
+      if (todasLasVeredas.length === 0) {
+        throw new Error("No se encontraron veredas de Boyacá.");
+      }
 
-  const capa = L.geoJSON({
-    type: "FeatureCollection",
-    features: todasLasVeredas
-  }, {
-    style: {
-      color: "#174c8c",
-      weight: 1,
-      fillColor: "#55a8d8",
-      fillOpacity: 0.35
-    },
+      const capaVeredas = L.geoJSON({
+        type: "FeatureCollection",
+        features: todasLasVeredas
+      }, {
+        style: {
+          color: "#174c8c",
+          weight: 1,
+          fillColor: "#55a8d8",
+          fillOpacity: 0.35
+        },
 
-    onEachFeature: (feature, layer) => {
-      const p = feature.properties;
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties;
 
-      layer.bindPopup(
-        "<b>Vereda:</b> " + (p.nom_ver || "Sin nombre") +
-        "<br><b>Municipio:</b> " + (p.nom_mpio || "Sin dato") +
-        "<br><b>Área:</b> " + (p.area_ha || "Sin dato") + " ha"
+          layer.bindPopup(
+            "<b>Vereda:</b> " + (p.nom_ver || "Sin nombre") +
+            "<br><b>Municipio:</b> " + (p.nom_mpio || "Sin dato") +
+            "<br><b>Área:</b> " + (p.area_ha || "Sin dato") + " ha"
+          );
+        }
+      }).addTo(mapa);
+
+      mapa.fitBounds(capaVeredas.getBounds());
+
+      console.log(
+        "Total de veredas cargadas:",
+        todasLasVeredas.length
       );
+
+      return capaVeredas;
     }
-  }).addTo(mapa);
 
-  mapa.fitBounds(capa.getBounds());
+    // Cargar establecimientos de salud
+    async function cargarHospitales() {
+      const respuesta = await fetch("./hospitales_boyaca.geojson");
 
-  console.log("Total de veredas cargadas:", todasLasVeredas.length);
-}
+      if (!respuesta.ok) {
+        throw new Error("No se pudo cargar el archivo de hospitales.");
+      }
 
+      const datosHospitales = await respuesta.json();
 
-    cargarVeredas().catch(error => {
-      console.error("Error al cargar las veredas:", error);
-      alert("No fue posible cargar las veredas. Revisa la consola.");
+      const capaHospitales = L.geoJSON(datosHospitales, {
+        pointToLayer: (feature, latlng) => {
+          return L.circleMarker(latlng, {
+            radius: 6,
+            color: "#7a1717",
+            weight: 2,
+            fillColor: "#e63946",
+            fillOpacity: 0.9
+          });
+        },
+
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties;
+
+          layer.bindPopup(
+            "<b>Establecimiento:</b> " + (p.Nombre || "Sin nombre") +
+            "<br><b>Municipio:</b> " + (p.NOM_MPIO || "Sin dato") +
+            "<br><b>Dirección:</b> " + (p.Direccion || "Sin dato") +
+            "<br><b>Teléfono:</b> " + (p.Telefono || "Sin dato")
+          );
+        }
+      }).addTo(mapa);
+
+      console.log(
+        "Total de establecimientos cargados:",
+        datosHospitales.features.length
+      );
+
+      return capaHospitales;
+    }
+
+    // Iniciar y controlar las capas
+    async function iniciarCapas() {
+      const capaVeredas = await cargarVeredas();
+      const capaHospitales = await cargarHospitales();
+
+      const capas = {
+        "Veredas de Boyacá": capaVeredas,
+        "Establecimientos de salud": capaHospitales
+      };
+
+      L.control.layers(null, capas, {
+        collapsed: false
+      }).addTo(mapa);
+    }
+
+    iniciarCapas().catch(error => {
+      console.error("Error al cargar las capas:", error);
+      alert("No fue posible cargar todas las capas. Revisa la consola.");
     });
+
   </script>
+
 </body>
 </html>
